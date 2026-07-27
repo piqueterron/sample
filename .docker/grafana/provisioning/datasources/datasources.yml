@@ -1,0 +1,48 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    uid: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    uid: tempo
+    url: http://tempo:3200
+    editable: true
+    jsonData:
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags:
+          - key: service.name
+            value: service
+          - key: deployment.environment
+            value: environment
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+
+  - name: Loki
+    type: loki
+    access: proxy
+    uid: loki
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Allow clicking a trace_id in a log line to jump to Tempo
+        - name: TraceID
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '$${__url.raw}/explore?schemaVersion=1&panes={"ln3":{"datasource":"tempo","queries":[{"refId":"A","datasource":{"type":"traces","uid":"tempo"},"query":"$${__value.raw}"}],"range":{"from":"now-1h","to":"now"}}}'
+          datasourceUid: tempo

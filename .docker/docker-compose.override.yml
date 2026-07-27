@@ -1,0 +1,22 @@
+services:
+  sample.api:
+    environment:
+      - Keycloak__Authority=http://keycloak:8080/realms/company
+      - Keycloak__Audience=portal-api
+      - Keycloak__RequireHttpsMetadata=false
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ASPNETCORE_HTTPS_PORTS=
+      - OTEL_SERVICE_NAME=sample-api
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development
+    depends_on:
+      - alloy
+    ports:
+      - "5157:8080"
+    volumes:
+      - ~/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+      - ~/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
+      - ~/ASP.NET/Https:/home/app/.aspnet/https:ro
+      - ~/ASP.NET/Https:/root/.aspnet/https:ro

@@ -1,0 +1,11 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\.docker",
+    "\\backend",
+    "\\backend\\src",
+    "\\backend\\src\\Sample.Api"
+  ],
+  "SelectedNode": "\\.docker\\docker-compose.yml",
+  "PreviewInSolutionExplorer": false
+}

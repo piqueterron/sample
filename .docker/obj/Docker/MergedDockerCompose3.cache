@@ -1,0 +1,366 @@
+name: dockercompose9872715225111845491
+services:
+  alloy:
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --stability.level=experimental
+      - /etc/alloy/config.alloy
+    container_name: alloy
+    depends_on:
+      loki:
+        condition: service_started
+        required: true
+      prometheus:
+        condition: service_started
+        required: true
+      tempo:
+        condition: service_started
+        required: true
+    image: grafana/alloy:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 12345
+        published: "12345"
+        protocol: tcp
+      - mode: ingress
+        target: 4317
+        published: "4317"
+        protocol: tcp
+      - mode: ingress
+        target: 4318
+        published: "4318"
+        protocol: tcp
+    restart: unless-stopped
+    user: "0:0"
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\alloy\config.alloy
+        target: /etc/alloy/config.alloy
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+        bind:
+          create_host_path: true
+  grafana:
+    container_name: grafana
+    depends_on:
+      loki:
+        condition: service_started
+        required: true
+      prometheus:
+        condition: service_started
+        required: true
+      tempo:
+        condition: service_started
+        required: true
+    environment:
+      GF_INSTALL_PLUGINS: ""
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    image: grafana/grafana:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\grafana\provisioning
+        target: /etc/grafana/provisioning
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\.git\.private\sample\.docker\grafana\dashboards
+        target: /var/lib/grafana/dashboards
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: grafana-data
+        target: /var/lib/grafana
+        volume: {}
+  keycloak:
+    command:
+      - start-dev
+      - --import-realm
+    container_name: keycloak
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: true
+    environment:
+      KC_DB: postgres
+      KC_DB_PASSWORD: keycloak
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_URL_HOST: postgres
+      KC_DB_USERNAME: keycloak
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    image: quay.io/keycloak/keycloak:26.2
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\keycloak
+        target: /opt/keycloak/data/import
+        bind:
+          create_host_path: true
+  loki:
+    command:
+      - -config.file=/etc/loki/loki-config.yaml
+    container_name: loki
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://localhost:3100/ready | grep -q ready || exit 1
+      timeout: 5s
+      interval: 10s
+      retries: 10
+    image: grafana/loki:3.5.5
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 3100
+        published: "3100"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\loki\loki-config.yaml
+        target: /etc/loki/loki-config.yaml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: loki-data
+        target: /loki
+        volume: {}
+  postgres:
+    container_name: postgres
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_USER: keycloak
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U keycloak
+      interval: 5s
+      retries: 20
+    image: postgres:16
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 5432
+        published: "5432"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: postgres
+        target: /var/lib/postgresql/data
+        volume: {}
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver
+      - --web.enable-lifecycle
+    container_name: prometheus
+    image: prom/prometheus:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 9090
+        published: "9090"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\prometheus\prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: prometheus-data
+        target: /prometheus
+        volume: {}
+  sample.api:
+    build:
+      context: C:\.git\.private\sample
+      dockerfile: backend/src/Sample.Api/Dockerfile
+      args:
+        BUILD_CONFIGURATION: Debug
+        LAUNCHING_FROM_VS: "true"
+      labels:
+        com.microsoft.created-by: visual-studio
+        com.microsoft.visual-studio.project-name: Sample.Api
+      target: base
+    container_name: api
+    depends_on:
+      alloy:
+        condition: service_started
+        required: true
+    entrypoint:
+      - dotnet
+      - --roll-forward
+      - Major
+      - /VSTools/DistrolessHelper/DistrolessHelper.dll
+      - --wait
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ASPNETCORE_HTTPS_PORTS: ""
+      ASPNETCORE_LOGGING__CONSOLE__DISABLECOLORS: "true"
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      Keycloak__Audience: portal-api
+      Keycloak__Authority: http://keycloak:8080/realms/company
+      Keycloak__RequireHttpsMetadata: "false"
+      NUGET_FALLBACK_PACKAGES: /.nuget/fallbackpackages
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_RESOURCE_ATTRIBUTES: deployment.environment=development
+      OTEL_SERVICE_NAME: sample-api
+    image: sampleapi:dev
+    labels:
+      com.microsoft.visualstudio.debuggee.arguments: ' --additionalProbingPath /.nuget/packages --additionalProbingPath /.nuget/fallbackpackages  "/app/bin/Debug/net10.0/Sample.Api.dll"'
+      com.microsoft.visualstudio.debuggee.killprogram: dotnet --roll-forward Major /VSTools/DistrolessHelper/DistrolessHelper.dll --stop dotnet
+      com.microsoft.visualstudio.debuggee.program: dotnet
+      com.microsoft.visualstudio.debuggee.workingdirectory: /app
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        protocol: tcp
+    tty: true
+    volumes:
+      - type: bind
+        source: C:\Users\epique\AppData\Roaming\Microsoft\UserSecrets
+        target: /home/app/.microsoft/usersecrets
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\epique\AppData\Roaming\Microsoft\UserSecrets
+        target: /root/.microsoft/usersecrets
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\epique\AppData\Roaming\ASP.NET\Https
+        target: /home/app/.aspnet/https
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\epique\AppData\Roaming\ASP.NET\Https
+        target: /root/.aspnet/https
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\.git\.private\sample\backend\src\Sample.Api
+        target: /app
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\.git\.private\sample
+        target: /src
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\epique\vsdbg\vs2017u5
+        target: /remote_debugger
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Users\epique\.nuget\packages
+        target: /.nuget/packages
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Program Files (x86)\Microsoft Visual Studio\Shared\NuGetPackages
+        target: /.nuget/fallbackpackages
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Sdks\Microsoft.Docker.Sdk\tools\linux-x64\net6.0
+        target: /VSTools
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: C:\Program Files\Microsoft Visual Studio\18\Insiders\Common7\IDE\extensions\Microsoft\managedprojectsystem\HotReload
+        target: /HotReloadAgent
+        read_only: true
+        bind:
+          create_host_path: true
+  tempo:
+    command:
+      - -config.file=/etc/tempo/tempo.yaml
+    container_name: tempo
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://localhost:3200/ready | grep -q ready || exit 1
+      timeout: 5s
+      interval: 10s
+      retries: 10
+    image: grafana/tempo:2.6.0
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 3200
+        published: "3200"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: C:\.git\.private\sample\.docker\tempo\tempo.yaml
+        target: /etc/tempo/tempo.yaml
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: volume
+        source: tempo-data
+        target: /var/tempo
+        volume: {}
+networks:
+  default:
+    name: dockercompose9872715225111845491_default
+volumes:
+  grafana-data:
+    name: dockercompose9872715225111845491_grafana-data
+  loki-data:
+    name: dockercompose9872715225111845491_loki-data
+  postgres:
+    name: dockercompose9872715225111845491_postgres
+  prometheus-data:
+    name: dockercompose9872715225111845491_prometheus-data
+  tempo-data:
+    name: dockercompose9872715225111845491_tempo-data

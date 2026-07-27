@@ -1,0 +1,18 @@
+@Sample.Api_HostAddress = http://localhost:5156
+
+### Obtain access token via the API (admin / admin) -> proxies Keycloak password grant
+# @name token
+POST {{Sample.Api_HostAddress}}/auth/token
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin"
+}
+
+### Use the token to call /users (requires "admin" role)
+GET {{Sample.Api_HostAddress}}/users/
+Accept: application/json
+Authorization: Bearer {{token.response.body.access_token}}
+
+###

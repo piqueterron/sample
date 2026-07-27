@@ -1,0 +1,121 @@
+// Alloy configuration (OTLP ingress -> traces to Tempo, metrics to Prometheus)
+// Ref: https://grafana.com/docs/alloy/latest/
+
+// ---------------------------------------------------------------
+// Ingress: receive OTLP traces + metrics from .NET SDK (gRPC/HTTP)
+// ---------------------------------------------------------------
+otelcol.receiver.otlp "local" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+// ---------------------------------------------------------------
+// Batch processor: improve throughput before exporting
+// ---------------------------------------------------------------
+otelcol.processor.batch "default" {
+  timeout = "5s"
+  send_batch_size = 1024
+
+  output {
+    metrics = [otelcol.exporter.prometheus.local.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// ---------------------------------------------------------------
+// Traces exporter: forward to Tempo via OTLP gRPC
+// ---------------------------------------------------------------
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// ---------------------------------------------------------------
+// Metrics exporter: convert OTLP metrics -> Prometheus format
+// and remote_write to Prometheus
+// ---------------------------------------------------------------
+otelcol.exporter.prometheus "local" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+// ---------------------------------------------------------------
+// Logs: collect container logs via Docker socket
+// https://grafana.com/docs/alloy/latest/reference/components/loki.source.docker/
+// ---------------------------------------------------------------
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Add the container name as a stream label BEFORE writing to Loki.
+// This keeps a stable selector ({container_name="api"}) even when the
+// JSON parsing below doesn't find a useful field.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // Docker's __meta_docker_container_name includes a leading "/".
+  // Trim it so the label is just "api" / "alloy" / etc.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex        = "/(.+)"
+    target_label = "container_name"
+    replacement  = "$1"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.container_logs.receiver]
+}
+
+loki.process "container_logs" {
+  // .NET's AddJsonConsole emits lines like:
+  //   {"Timestamp":"...","EventId":0,"LogLevel":"Information",
+  //    "Category":"Microsoft.Hosting.Lifetime","Message":"...","State":{},...}
+  // So we extract the PascalCase fields used in our Grafana dashboard and
+  // Grafana-derived-fields (the trace_id pattern is matched against the
+  // whole line). Labels with empty values are dropped automatically by
+  // the stage.labels stage.
+  stage.json {
+    expressions = {
+      level   = "LogLevel",
+      logger  = "Category",
+      message = "Message",
+      traceID = "trace_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level  = "",
+      logger = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

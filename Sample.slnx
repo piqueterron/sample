@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/backend/" />
+  <Folder Name="/backend/src/">
+    <Project Path="backend/src/Sample.Api/Sample.Api.csproj" Id="3a8ea410-9c67-4ea2-998e-d595504ea196" />
+    <Project Path="backend/src/Sample.Application/Sample.Application.csproj" Id="a0c8c174-8b71-4307-83a0-75f91746245b" />
+    <Project Path="backend/src/Sample.Domain/Sample.Domain.csproj" Id="85a9aa57-00a2-46c9-b4b3-3fbe215694b2" />
+    <Project Path="backend/src/Sample.Infrastructure/Sample.Infrastructure.csproj" Id="c7f60bc3-c04d-4cfa-824f-36ffe8891b43" />
+  </Folder>
+  <Project Path=".docker/docker-compose.dcproj">
+    <Build />
+  </Project>
+</Solution>

@@ -1,0 +1,28 @@
+# Tempo configuration for local development (single-node, local storage).
+# Ref: https://grafana.com/docs/tempo/latest/configuration/
+#
+# NOTE: 'ingester' and 'metrics_generator' top-level blocks are intentionally
+# omitted. They were removed/renamed in Tempo 3.x ('field ingester not found
+# in type app.Config'). Tempo's built-in defaults are fine for local dev;
+# adding them back later requires choosing between 2.x vs 3.x schemas.
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal

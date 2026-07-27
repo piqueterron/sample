@@ -1,0 +1,27 @@
+﻿using Sample.Api.Extensions;
+using Scalar.AspNetCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddOpenApi();
+builder.Services.AddEndpoints();
+builder.Services.AddDispatcher();
+builder.Services.AddObservability(builder.Configuration);
+builder.Services.AddKeycloakAuth(builder.Configuration);
+
+var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+
+app.UseHttpsRedirection();
+
+await app.RunAsync();
