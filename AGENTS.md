@@ -50,6 +50,12 @@ backend/
       Behaviors/ValidationBehavior.cs
     Sample.Domain/                # pure domain model (no dependencies)
   tests/                          # empty - planned for xUnit
+backoffice/                      # React 19 + Vite + TypeScript SPA (Authorization Code + PKCE)
+  src/                            # main.tsx, App.tsx, oidc.ts (UserManager), api.ts
+  public/                         # favicon.svg
+  Dockerfile                      # multi-stage: node build -> nginx serve (port 80->5173)
+  package.json, vite.config.ts    # Vite dev server 5173, /api proxy -> API
+  .env                            # VITE_OIDC_* (public PKCE client, no secret)
 .docker/                          # local dev observability + Keycloak stack
   docker-compose.yml              # base services
   docker-compose.override.yml     # dev overrides: ports, env, Keycloak config
@@ -205,6 +211,61 @@ patterns before touching auth code:
    ```
 
    Then call protected endpoints with `Authorization: Bearer <access_token>`.
+
+5. **Issuer split between Docker API and browser-facing Keycloak**: when the
+   API runs in Docker and the SPA (backoffice) runs in the host browser, the
+   API discovers OIDC metadata at `http://keycloak:8080/realms/company` (the
+   in-container authority), but tokens received from the browser by Keycloak
+   are stamped with `iss=http://localhost:8080/realms/company` (the
+   browser-facing authority, taken from the `Host` header). They differ, so a
+   token issued through a proper OIDC flow will be rejected with
+   `error_description="The issuer 'http://localhost:8080/...' is invalid"`.
+   The fix is in `BuilderExtensions.AddKeycloakAuth`: `authority` is used for
+   discovery/jwks only, and `Keycloak:ValidIssuers` (semicolon-separated,
+   `appsettings.Development.json` + `docker-compose.override.yml`) lists every
+   issuer that may legitimately appear in a token. Keep both `localhost` and
+   `keycloak` hostnames whenever the API is consumed by a browser client.
+6. **SPAs must use a dedicated PKCE public client**: the React backoffice
+   (`backoffice/`) uses the `backoffice-web` client configured in
+   `realm-export.json` (`standardFlowEnabled=true`, `directAccessGrantsEnabled
+   =false`, `pkce.code.challenge.method=S256`) with `react-oidc-context` +
+   `oidc-client-ts`. The `backoffice-web` client has an
+   `oidc-audience-mapper` that mints `aud=portal-api` (the resource-server
+   client) on its access tokens, so a single audience validation covers both
+   the password-grant and PKCE flows. Do **not** reuse `portal-api` for the
+   SPA - enabling direct access grants on a browser client is an anti-pattern.
+
+### Backoffice SPA conventions (`backoffice/`)
+
+- **Stack**: React 19 + Vite 7 + TypeScript (`strict`), OIDC via
+  `react-oidc-context` (built on `oidc-client-ts`).
+- **Dev server**: `npm run dev` -> `http://localhost:5173`. The Vite dev proxy
+  forwards `/api/*` to the API (`VITE_API_PROXY_TARGET`, default
+  `http://localhost:5157`), so the SPA calls relative URLs (no CORS preflight)
+  during local development.
+- **OIDC config** (`src/oidc.ts`): a single `UserManager` with
+  `response_type: 'code'`, `scope: 'openid profile email'`, state in
+  `localStorage` (prefix `backoffice.oidc.`). PKCE S256 challenge/verifier is
+  generated automatically by `oidc-client-ts` - **do not** supply a partial
+  `metadata` object (it short-circuits the discovery fetch and breaks the
+  authorize redirect). Leave `metadata` unset so the discovery doc is loaded
+  from `authority`.
+- **Auto sign-in** (`src/App.tsx`): `react-oidc-context` v3 has no `autoSignin`
+  prop; an `useEffect` triggers `auth.signinRedirect()` when the user is not
+  authenticated and no navigator is in flight.
+- **Sign-in callback** (`src/main.tsx`): `onSigninCallback` strips the
+  `code`/`state` querystring after the redirect so a refresh does not replay
+  the callback.
+- **Container**: `Dockerfile` builds the Vite bundle (with build-time
+  `VITE_OIDC_*` / `VITE_API_BASE_URL` args) then serves `dist/` with Nginx on
+  port 80, port-mapped to host `5173`. Build args must reflect
+  **browser-reachable** URLs (`localhost`), not Docker service names.
+- **CORS**: even though the dev proxy avoids CORS in local dev, the API
+  registers the `"spa"` CORS policy (`BuilderExtensions.AddSpaCors`) so calls
+  from other origins (e.g. the Nginx container at
+  `http://localhost:5173` -> `http://localhost:5157`) work without a proxy.
+  Origins come from `Cors:AllowedOrigins` (semicolon-separated) in
+  `docker-compose.override.yml`.
 
 ### Observability convention
 

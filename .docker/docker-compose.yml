@@ -15,6 +15,13 @@ services:
       start_period: 10s
       retries: 3
 
+  backoffice:
+    image: ${DOCKER_REGISTRY-}backoffice
+    container_name: backoffice
+    build:
+      context: ../backoffice
+      dockerfile: Dockerfile
+
   postgres:
     image: postgres:16
     container_name: postgres

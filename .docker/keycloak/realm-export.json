@@ -53,6 +53,69 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "backoffice-web",
+      "name": "Backoffice SPA (PKCE)",
+      "description": "Authorization Code flow with PKCE for the React SPA. Public client (no client secret).",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+
+      "rootUrl": "http://localhost:5173",
+      "adminUrl": "http://localhost:5173",
+
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:5174/*",
+        "http://localhost:4173/*"
+      ],
+
+      "webOrigins": [
+        "+",
+        "http://localhost:5173",
+        "http://localhost:4173"
+      ],
+
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "client_credentials.use_refresh_token": "false",
+        "legacy_id_token_claims": "false",
+        "use.refresh.tokens": "true"
+      },
+
+      "protocolMappers": [
+        {
+          "name": "audience-backoffice",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "portal-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "realm-roles-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
     }
   ],
 
