@@ -8,12 +8,14 @@ builder.Services.AddEndpoints();
 builder.Services.AddDispatcher();
 builder.Services.AddObservability(builder.Configuration);
 builder.Services.AddKeycloakAuth(builder.Configuration);
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
 app.MapEndpoints();
 
 if (app.Environment.IsDevelopment())

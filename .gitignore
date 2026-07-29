@@ -1,0 +1,154 @@
+# ---------------------------------------------------------------------------
+# .NET / Visual Studio
+# https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
+# ---------------------------------------------------------------------------
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio cache directories
+.vs/
+*.VC.db
+*.VC.VC.opendb
+*.aps
+*.opensdf
+*.sdf
+*.cachefile
+*.psess
+*.vsp
+*.vspx
+*.rsusr
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+TestResult.xml
+
+# Publish output
+publish/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.publishproj
+*.publishproj
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# Code analysis
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.log
+*.tlog
+*.lastbuildstate
+*.unsuccessfulbuild
+*.idb
+*.opendb
+
+# .NET Core / .NET 5+
+project.assets.json
+*.nuget.dgspec.json
+*.nuget.g.props
+*.nuget.g.targets
+*.nuget.cache
+*.nuget.v3.cache
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+# Keep VS Code workspace files but ignore transient state.
+!*.code-workspace
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Build vendor directories
+node_modules/
+
+# User-specific secrets (never commit)
+*.keystore
+*.pfx
+*.key
+secrets.json
+appsettings.*.Development.json.user
+
+# ---------------------------------------------------------------------------
+# Docker / local runtime artifacts
+# ---------------------------------------------------------------------------
+*.docker-volume
+
+# ---------------------------------------------------------------------------
+# OS files
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Agent skills: keep these tracked (committable, shared with the team)
+# ---------------------------------------------------------------------------
+# .agents/skills/ is installed from skills-lock.json; do NOT ignore it.
+# skills-lock.json is the source of truth (pinned versions).
+
+# Claude Code directory junctions are recreated by `npx skills add` and should
+# not be tracked because they duplicate .agents/skills/.
+.claude/
+
+# ---------------------------------------------------------------------------
+# Local observability / docker-compose runtime artifacts
+# Postgres uses a named Docker volume (not a local dir); grafana/loki/tempo
+# persist config only (tracked). Ignore stray build output under .docker.
+# ---------------------------------------------------------------------------
+.docker/bin/
+.docker/obj/
+**/docker-compose.dcproj.user

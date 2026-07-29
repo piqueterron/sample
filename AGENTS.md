@@ -1,0 +1,395 @@
+# AGENTS.md
+
+This file gives AI coding agents the context needed to work effectively on this
+repository. It complements `README.md` (human-focused) with agent-focused
+technical instructions. Spec follows <https://agents.md/>.
+
+## Project Overview
+
+**sample** is a backend reference implementation in **.NET 10** built with a
+strict DDD layering and a vertical-slices feature layout. The API is an
+ASP.NET Core **Minimal API** secured with **Keycloak** (OIDC / JWT Bearer),
+persisting to **PostgreSQL** through **Entity Framework Core** (Npgsql). It is
+fully instrumented with **OpenTelemetry** and ships with a local observability
+stack (Alloy -> Tempo / Loki / Prometheus -> Grafana).
+
+### Key technologies
+
+- **Language / Framework**: C# 13 / .NET 10 (`net10.0`)
+- **API host**: ASP.NET Core Minimal APIs + OpenAPI (Microsoft.OpenApi)
+- **API docs UI**: Scalar.AspNetCore (`/scalar/v1`)
+- **Mediation**: Mediator (source-generator, `Sample` namespace)
+- **Validation pipeline**: `ValidationBehavior<,>` registered as Mediator pipeline
+- **Persistence**: EF Core 10 + Npgsql.EntityFrameworkCore.PostgreSQL
+- **AuthN**: Keycloak 26.2 (OIDC) + `JwtBearer`
+- **AuthZ**: Policy-based, `RequireAssertion` over `realm_access`/`resource_access` claims
+- **Observability**: OpenTelemetry 1.17 (Traces + Metrics, OTLP HTTP) -> Grafana LGTM
+- **DI assembly scanning**: Scrutor
+- **Containerization**: Docker (multi-stage Dockerfile), docker-compose dev stack
+- **Solution file**: `Sample.slnx` (XML-based, .NET 10 feature)
+
+### Solution layout
+
+```text
+Sample.slnx                       # XML solution (root)
+Directory.Build.props             # net10.0, ImplicitUsings, Nullable, analyzers
+Directory.Packages.props          # Central Package Management (CPM)
+backend/
+  src/
+    Sample.Api/                   # Composition root, Minimal API endpoints, DI
+      Endpoints/                  # vertical slices: Auth/, Users/
+        IEndpoint.cs              # marker interface for endpoint registration
+      Extensions/                 # BuilderExtensions, EndpointExtensions, ObservabilityExtensions
+      Program.cs                  # top-level host (1 file, no Startup)
+      Dockerfile                   # multi-stage, mcr.microsoft.com/dotnet/{sdk,aspnet}:10.0
+      appsettings*.json           # config; sensitive values via UserSecrets / env
+    Sample.Application/           # use-cases (Features/<Feature>/<Query|Command>/)
+      Features/Users/GetUsers/
+      AssemblyInfo.cs
+    Sample.Infrastructure/        # cross-cutting: EF Core, Mediator pipeline behaviors
+      Behaviors/ValidationBehavior.cs
+    Sample.Domain/                # pure domain model (no dependencies)
+  tests/                          # empty - planned for xUnit
+.docker/                          # local dev observability + Keycloak stack
+  docker-compose.yml              # base services
+  docker-compose.override.yml     # dev overrides: ports, env, Keycloak config
+  alloy/ grafana/ keycloak/ loki/ prometheus/ tempo/
+.editorconfig                     # spaces, project-wide formatting
+```
+
+Layering dependency rule (enforced by project references):
+
+```text
+Api  ->  Application  ->  Infrastructure  ->  Domain
+         (Features)      (Behaviors)        (Entities/ValueObjects)
+```
+
+`Sample.Application` references `Sample.Infrastructure` (which holds the
+Mediator pipeline behavior and EF Core wiring) and `Sample.Infrastructure`
+references `Sample.Domain`. `Sample.Domain` has **no** package references.
+Do not invert this direction.
+
+## Setup Commands
+
+### Prerequisites
+
+- **.NET SDK 10** (`dotnet --version` must report a `10.x` build).
+  Verified on `10.0.400-preview.0.26322.102`. Produces an informational
+  `NETSDK1057` message (using a preview release) - this is expected, not an error.
+- **Docker** + Docker Compose (for the local observability + Keycloak stack).
+- No Node.js, Python, or other runtimes are required for the backend.
+
+### Restore & build
+
+```bash
+dotnet restore Sample.slnx
+dotnet build Sample.slnx -c Debug          # verified: 0 errors, 0 warnings
+dotnet build Sample.slnx -c Release
+```
+
+### Local dependencies (Keycloak + Postgres + Grafana LGTM)
+
+From the repo root:
+
+```bash
+docker compose -f .docker/docker-compose.yml -f .docker/docker-compose.override.yml up -d
+```
+
+Services exposed on the host:
+
+- **Keycloak**: <http://localhost:8080> - credentials `admin / admin`
+- **Postgres**: `localhost:5432` (db `keycloak`) - credentials `keycloak / keycloak`
+- **Grafana**: <http://localhost:3000> - credentials `admin / admin`
+- **Alloy UI**: <http://localhost:12345>
+- **Tempo API**: <http://localhost:3200>
+- **Loki API**: <http://localhost:3100>
+- **Prometheus**: <http://localhost:9090>
+
+### Run the API
+
+Host (uses `appsettings.Development.json`, OTLP at `http://localhost:4318`):
+
+```bash
+dotnet run --project backend/src/Sample.Api/Sample.Api.csproj
+```
+
+Container (override maps host `5157` -> container `8080`):
+
+```bash
+docker compose -f .docker/docker-compose.yml -f .docker/docker-compose.override.yml up sample.api
+```
+
+### User Secrets
+
+The `Sample.Api` project has `UserSecretsId = 325c578c-ca6d-464f-a459-6fb7558a19d0`.
+Sensitive values (e.g. `Keycloak:ClientSecret` for confidential clients) must
+live in User Secrets or env vars, never in committed `appsettings*.json`.
+
+## Development Workflow
+
+### Endpoint convention (vertical slices)
+
+Every HTTP feature is a `sealed class` implementing `IEndpoint`
+(`backend/src/Sample.Api/Endpoints/IEndpoint.cs`):
+
+```csharp
+public sealed class MyFeatureEndpoint : IEndpoint
+{
+    public void MapEndpoints(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/my-feature").WithTags("MyFeature");
+        group.MapGet("/", HandleAsync)
+             .WithSummary("...")
+             .Produces(StatusCodes.Status200OK);
+    }
+}
+```
+
+- Endpoints are auto-discovered via Scrutor (`EndpointExtensions.AddEndpoints`
+  scans `typeof(IEndpoint).Assembly`), so a new endpoint file needs **no**
+  manual registration.
+- Group the endpoints by tag with `WithTags`.
+- Always declare `WithSummary` / `WithDescription` + `Produces` / `ProducesProblem`
+  so the OpenAPI document (consumed by Scalar at `/scalar/v1`) stays complete.
+- Protected groups use `RequireAuthorization("<policy-name>")` (e.g. `"admin"`).
+
+### Application features
+
+Each use case lives in `Sample.Application/Features/<Feature>/<Query|Command>/`
+and is a `record` request + handler pair. Send through `IMediator`:
+
+```csharp
+await mediator.Send(new UserQuery(), cancellationToken);
+```
+
+`Mediator` source generator emits the dispatch types into the `Sample`
+namespace. Do not change `options.Namespace = "Sample"` or the generated types
+will not match handler lookups.
+
+### Validation behavior
+
+`Sample.Infrastructure.Behaviors.ValidationBehavior<TMessage,TResponse>` is
+wired into the Mediator pipeline. The current body is a `//TODO` placeholder -
+implement real validation here (FluentValidation or custom) when adding
+validation. Do not bypass the pipeline; route all validation through this
+behavior to keep cross-cutting concerns in one place.
+
+### Keycloak auth nuances (important)
+
+This repo has a non-trivial Keycloak + JwtBearer setup. Capture the verified
+patterns before touching auth code:
+
+1. **`aud` claim**: the Keycloak client `portal-api` must have an
+   `oidc-audience-mapper` protocol mapper, otherwise tokens fail validation
+   with `WWW-Authenticate: Bearer error="invalid_token", error_description="The audience 'empty' is invalid"`.
+   The realm import is at `.docker/keycloak/realm-export.json`. After editing
+   the realm, recreate the volume with `docker compose down -v` - a plain
+   `restart` will not re-import.
+2. **Nested roles**: Keycloak emits roles nested in
+   `realm_access.roles` / `resource_access.<client>.roles`. The default
+   JwtBearer mapper does **not** flatten them, so role-based authorization is
+   implemented with `RequireAssertion` policies that parse the JSON claim
+   (see `BuilderExtensions.AddKeycloakAuth`). Do **not** replace with
+   `RequireRole` / `IsInRole` alone - it will silently 403 even with valid
+   tokens.
+3. **Token exchange**: `POST /auth/token` accepts JSON or form-urlencoded
+   credentials and proxies Keycloak's `password` grant through a named
+   `HttpClient` `"keycloak-token"` (15s timeout, no auto-redirect). Keep the
+   dual `Accepts<>` declarations so both content types work.
+4. **Token for local testing** after `docker compose up`:
+
+   ```bash
+   curl -X POST http://localhost:5157/auth/token \
+        -H "Content-Type: application/json" \
+        -d '{"username":"admin","password":"admin","scope":"openid profile email"}'
+   ```
+
+   Then call protected endpoints with `Authorization: Bearer <access_token>`.
+
+### Observability convention
+
+- `ObservabilityExtensions` exposes a static `ActivitySource` named
+  `Sample.Api` (`1.0.0`). Start custom spans with
+  `ObservabilityExtensions.ActivitySource.StartActivity("name")`.
+- Mediator's own telemetry is enabled (`Sample.Mediator` activity source and
+  meter). Keep the names consistent - the OTel wiring subscribes to both.
+- Logs go to stdout as JSON (`AddJsonConsole`); Alloy tails them via the Docker
+  socket into Loki. Any log line carrying `"trace_id":"<id>"` renders a
+  cross-link from Loki to Tempo.
+- Health endpoints (`/health*`) are excluded from ASP.NET Core trace
+  instrumentation - preserve this filter when adding new instrumentation.
+
+## Testing Instructions
+
+The `backend/tests/` folder is currently empty - the test project has not been
+scaffolded yet. Conventions to follow when adding tests:
+
+- **Framework**: xUnit (the `csharp-xunit` skill is installed; see
+  `.agents/skills/csharp-xunit/`). Drop the test project at
+  `backend/tests/Sample.<Layer>.Tests/`.
+- **Test discovery**: file naming `*Tests.cs`, methods `public async Task` or
+  `public void`, `[Fact]` / `[Theory]` attributes.
+- **Reference target**: unit tests reference the layer under test only
+  (e.g. `Sample.Application.Tests` -> `Sample.Application`). Integration tests
+  can reference `Sample.Api` for the full stack.
+- **Run**:
+
+  ```bash
+  dotnet test Sample.slnx
+  dotnet test backend/tests/Sample.Application.Tests --filter "FullyQualifiedName~UserQuery"
+  ```
+
+- **Coverage**: configure `coverlet` / `dotnet-coverage` when scaffolding the
+  first test project; report a target here once set.
+
+## Code Style Guidelines
+
+- Enforced by `Directory.Build.props`:
+  - `TargetFramework=net10.0`, `ImplicitUsings=enable`, `Nullable=enable`.
+  - `EnableNETAnalyzers=true`, `EnforceCodeStyleInBuild=true` - the analyzer
+    rules run on every build. Keep the build warning-free (verified: 0 warnings).
+- `.editorconfig`: `root = true`, `indent_style = space`. Do not tab-indent.
+- **Namespace style**: file-scoped namespaces (`namespace Foo;`) everywhere.
+  References to sibling namespaces inside a `using`-block use a leading
+  `global::` when shadowing would otherwise occur (see `BuilderExtensions`).
+- **Classes are `sealed` by default** unless explicitly designed for
+  inheritance (every endpoint class is `sealed`).
+- **Endpoint classes**: one feature per file, `sealed`, implements `IEndpoint`,
+  methods `private static`.
+- **Records for DTOs / messages**: prefer `record` over `class` for request,
+  response, and command/query types.
+- **Async**: every I/O path returns `Task` / `ValueTask` / `IResult`-async and
+  takes a `CancellationToken cancellationToken` last. Do not call `.Result` /
+  `.Wait()`; never `async void`. Consult the `csharp-async` skill for edge
+  cases.
+- **XML docs**: public APIs must carry `/// <summary>` XML docs. The
+  `csharp-docs` skill documents the conventions and is installed locally.
+- **Configuration keys**: use `Section:Key` (e.g. `Keycloak:Authority`),
+  bind via `IConfiguration` in extension methods (see `BuilderExtensions`).
+- **Package versions**: managed centrally in `Directory.Packages.props` (CPM).
+  Use `dotnet add package <name>` (resolves to the centrally pinned version) or
+  bump the version in `Directory.Packages.props` directly. Never write a
+  `<PackageVersion>` into an individual `.csproj`. See the `nuget-manager` skill.
+
+## Build and Deployment
+
+### Build
+
+```bash
+dotnet build Sample.slnx -c Release
+dotnet publish backend/src/Sample.Api/Sample.Api.csproj -c Release -o ./publish
+```
+
+### Docker image
+
+`backend/src/Sample.Api/Dockerfile` is a multi-stage build
+(consult the `multi-stage-dockerfile` skill when authoring or optimizing it):
+
+1. `base`  - `mcr.microsoft.com/dotnet/aspnet:10.0`, non-root `$APP_UID`,
+   `EXPOSE 8080 8081`.
+2. `build` - `mcr.microsoft.com/dotnet/sdk:10.0`, restores (CPM props copied
+   first for layer caching), builds Release.
+3. `publish` - `dotnet publish /p:UseAppHost=false`.
+4. `final` - copies `/app/publish` into the base image.
+
+Build context is the repo root (`DockerfileContext = ../../..`). Build with:
+
+```bash
+docker compose -f .docker/docker-compose.yml -f .docker/docker-compose.override.yml build sample.api
+```
+
+### Environment configuration
+
+- `appsettings.json` - logging defaults only.
+- `appsettings.Development.json` - `Otel:*` (OTLP HTTP to `localhost:4318`) and
+  `Keycloak:*` (authority `http://localhost:8080/realms/company`, audience
+  `portal-api`).
+- `docker-compose.override.yml` - in-container overrides:
+  - `Keycloak__Authority=http://keycloak:8080/realms/company`
+  - `Keycloak__Audience=portal-api`, `Keycloak__RequireHttpsMetadata=false`
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318`,
+    `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`
+  - Host port `5157` -> container `8080` (note: host port differs from
+    container to avoid collisions with the host's `dotnet run` on `8080`).
+
+There is **no** CI pipeline yet. When one is added, follow the
+`github-actions-hardening` skill: SHA-pin third-party actions, least-privilege
+`permissions`, audit `pull_request_target` / `${{ }}` interpolation for script
+injection. Until then, do not add workflows that run on `@latest` tags.
+
+## Security Considerations
+
+- **Secrets never in JSON**: Keycloak client secrets, connection strings with
+  passwords, and signing keys go to User Secrets (`dotnet user-secrets`) or
+  environment variables. The committed `appsettings*.json` files must not
+  contain secrets.
+- **TLS**: `app.UseHttpsRedirection()` is on. When running the API outside
+  Docker in dev, Keycloak `RequireHttpsMetadata` is `false` (HTTP dev realm) -
+  this is dev-only and must be `true` in any non-dev environment.
+- **CORS**: not configured yet. If the frontends (`web/`, `backoffice/`, both
+  currently empty) need it, scope the origins explicitly rather than wildcard.
+- **Keycloak admin**: `admin/admin` is only acceptable for the local dev realm.
+  Rotate before any deployment.
+- **Database**: Postgres dev credentials `keycloak/keycloak` are dev-only.
+- **JWT audience validation**: `ValidateAudience=true` with
+  `ValidAudience=portal-api` - the `oidc-audience-mapper` on the Keycloak
+  client is mandatory (see Development Workflow -> Keycloak auth nuances).
+- Run the `security-review` skill before merging changes that touch
+  authentication, endpoints, or data access.
+
+## Skills (installed at project scope)
+
+The following agent skills are pinned in `skills-lock.json` and live in
+`.agents/skills/`. They are committable and shared with the team.
+
+- **`dotnet-best-practices`**: Any .NET/C# change - baseline quality rules
+- **`csharp-async`**: Async/await patterns, cancellation, `ValueTask` edge cases
+- **`csharp-docs`**: Writing/auditing XML doc comments on public APIs
+- **`aspnet-minimal-api-openapi`**: Adding endpoints, OpenAPI/Scalar integration
+- **`ef-core`**: DbContext, migrations, Npgsql querying patterns
+- **`nuget-manager`**: Adding/updating packages with Central Package Management
+- **`csharp-xunit`**: Writing tests when the tests project is scaffolded
+- **`github-actions-hardening`**: When CI workflows are introduced
+- **`multi-stage-dockerfile`**: Authoring/optimizing the multi-stage Dockerfile
+
+Update them with `npx skills update` (or `npx skills update <name>`). Restore
+on a fresh clone with `npx skills experimental_install`.
+
+## Debugging and Troubleshooting
+
+- **401 `audience 'empty' is invalid`**: missing `oidc-audience-mapper` on the
+  Keycloak client. Edit `.docker/keycloak/realm-export.json` and
+  `docker compose down -v && docker compose up -d` to re-import.
+- **401 `signature key was not found`**: OIDC discovery document did not
+  download; verify `Keycloak:Authority` matches the realm URL exactly
+  (trailing slash / `realms/company` segment).
+- **403 on a protected endpoint (no `WWW-Authenticate`)**: token is valid but
+  the policy's `RequireAssertion` did not find the role in the `realm_access`
+  / `resource_access` JSON. Check the realm import assigns the role to the
+  user and that the JSON claim is present in the token (decode at jwt.io).
+- **`dotnet run` returns 404 on a known endpoint**: a Docker container
+  (often `wslrelay` / `api`) is capturing the same port. Run
+  `Get-NetTCPConnection -LocalPort <port> -State Listen` and stop the
+  container, or use the container override port (`5157`) instead.
+- **`NETSDK1057` informational message**: running on a preview .NET SDK.
+  Build is still clean - this is noise, not a warning.
+- **Mediator dispatch fails at runtime**: confirm
+  `options.Assemblies = [typeof(Application.AssemblyInfo).Assembly]` and
+  `options.Namespace = "Sample"` were not changed; the source generator emits
+  dispatch types into that namespace.
+
+## Pull Request Guidelines
+
+- Title: concise, imperative (e.g. "Add user creation endpoint").
+- Commits: small and focused. When the team adopts Conventional Commits,
+  update this section.
+- The build must be warning-free: `dotnet build Sample.slnx` reports 0 warnings
+  on `main`. New warnings block merge.
+- New endpoints must declare OpenAPI metadata (`WithSummary`, `WithDescription`,
+  `Produces`, `ProducesProblem`) so Scalar stays accurate.
+- New application features must flow through `IMediator` (no direct handler
+  invocation from endpoints).
+- Secrets, connection strings with passwords, and signing material must never
+  be committed - use User Secrets or env vars.
+- Run the relevant installed skill (`dotnet-best-practices`, `ef-core`,
+  `aspnet-minimal-api-openapi`, etc.) before requesting review.
