@@ -29,3 +29,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 await app.RunAsync();
+
+// Expose the implicit `Program` type as public so WebApplicationFactory<Program>
+// (used by Sample.Api.IntegrationTests) can reference it for in-memory boot.
+public partial class Program;

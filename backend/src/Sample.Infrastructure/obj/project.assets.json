@@ -681,10 +681,12 @@
           "Mediator.Abstractions": "3.1.0-rc.1",
           "Mediator.SourceGenerator": "3.1.0-rc.1",
           "Microsoft.AspNetCore.Authentication.JwtBearer": "10.0.10",
+          "Microsoft.AspNetCore.Mvc.Testing": "10.0.10",
           "Microsoft.AspNetCore.OpenApi": "10.0.10",
           "Microsoft.EntityFrameworkCore": "10.0.10",
           "Microsoft.EntityFrameworkCore.Analyzers": "10.0.10",
           "Microsoft.EntityFrameworkCore.Design": "10.0.10",
+          "Microsoft.NET.Test.Sdk": "17.14.1",
           "Microsoft.OpenApi": "2.7.5",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "10.0.3",
           "OpenTelemetry": "1.17.0",
@@ -695,7 +697,12 @@
           "OpenTelemetry.Instrumentation.Process": "1.17.0-rc.1",
           "OpenTelemetry.Instrumentation.Runtime": "1.17.0",
           "Scalar.AspNetCore": "2.16.16",
-          "Scrutor": "7.0.0"
+          "Scrutor": "7.0.0",
+          "Testcontainers": "4.13.0",
+          "Testcontainers.Keycloak": "4.13.0",
+          "Testcontainers.PostgreSql": "4.13.0",
+          "xunit": "2.9.3",
+          "xunit.runner.visualstudio": "3.1.4"
         },
         "imports": [
           "net461",

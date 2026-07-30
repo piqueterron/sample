@@ -28,7 +28,11 @@ backend/
     Sample.Application/           # use-cases (Features/<Feature>/<Query|Command>/)
     Sample.Infrastructure/        # Mediator pipeline behaviors, EF Core wiring
     Sample.Domain/                # pure domain model (no dependencies)
-  tests/                          # planned for xUnit (.agents/skills/csharp-xunit)
+  tests/
+    Sample.Api.IntegrationTests/   # xUnit + Testcontainers (Keycloak) + WebApplicationFactory
+      keycloak/realm-export.json    # minimal realm imported into the test Keycloak
+      Infrastructure/              # KeycloakFixture, SampleApiFactory, IntegrationTestBase
+      Endpoints/                   # PublicEndpointsTests, UsersEndpointAuthorizationTests
 backoffice/                        # React 19 + Vite + TypeScript SPA
   src/                            # main.tsx, App.tsx, oidc.ts, api.ts
   public/                         # favicon.svg
@@ -144,6 +148,87 @@ Verify negative cases work as expected:
 | `user` (role=user) token           | `403 Forbidden` |
 | No token                           | `401 Unauthorized` |
 | Bad/expired token                  | `401 Unauthorized` |
+
+## Integration tests (`backend/tests/Sample.Api.IntegrationTests/`)
+
+End-to-end tests that boot the **real** `Sample.Api` in-memory via
+`WebApplicationFactory<Program>` and exercise the protected endpoints against a
+**real Keycloak** instance brought up on demand by [Testcontainers]. No mocked
+JWT middleware, no in-memory auth - the JwtBearer stack, the `admin` policy's
+`RequireAssertion` and the `oidc-audience-mapper` audience validation are all
+exercised against tokens minted by a live Keycloak.
+
+### What the tests spin up (and what they deliberately do NOT)
+
+| Service         | Started by tests? | Why                                            |
+|-----------------|:-----------------:|------------------------------------------------|
+| Keycloak 26.2   | yes (Testcontainers)             | OIDC issuer for the JwtBearer auth stack       |
+| Postgres        | no                               | The API has no EF Core DbContext wired yet     |
+| Alloy / Tempo / Loki / Prometheus / Grafana | no | Observability adds nothing to the assertions and slows the run |
+
+The Keycloak container uses the **dev-grade `quay.io/keycloak/keycloak:26.2`**
+image in `start-dev` mode and imports `keycloak/realm-export.json` (a copy of
+the dev realm that ships with the docker-compose stack, minus the
+`backoffice-web` client - the tests never run a browser flow). The fixture waits
+for the OIDC discovery document to become reachable before yielding, so a test
+never sees a half-bootstrapped realm.
+
+### Test coverage
+
+| Test (xUnit `[Fact]`)                                              | Endpoint          | Asserts                                  |
+|--------------------------------------------------------------------|-------------------|------------------------------------------|
+| `PublicEndpointsTests.GetHealth_Returns200`                        | `GET /health`     | `200 OK`                                 |
+| `PublicEndpointsTests.PostToken_WithAdminCredentials_…`            | `POST /auth/token`| `200 OK` + `access_token`                |
+| `PublicEndpointsTests.PostToken_WithMissingCredentials_…`          | `POST /auth/token`| `400 Bad Request`                        |
+| `UsersEndpointAuthorizationTests.GetUsers_WithoutToken_…`         | `GET /users`      | `401 Unauthorized`                       |
+| `UsersEndpointAuthorizationTests.GetUsers_WithAdminToken_…`       | `GET /users`      | `200 OK` (role `admin`)                  |
+| `UsersEndpointAuthorizationTests.GetUsers_WithUserRoleToken_…`    | `GET /users`      | `403 Forbidden` (role `user`)            |
+| `UsersEndpointAuthorizationTests.GetUsers_WithGarbageToken_…`     | `GET /users`      | `401 Unauthorized`                       |
+
+Every test class extends `IntegrationTestBase`, which is decorated with the
+shared xUnit collection `IntegrationTests`. The collection itself hosts the
+single `KeycloakFixture` (`ICollectionFixture<>`), so the Keycloak container is
+started **once** per test run and torn down at the end - subsequent tests in
+the same run reuse the running container (~1-2s per assertion).
+
+### How the API is rewired in tests
+
+`SampleApiFactory : WebApplicationFactory<Program>` overrides `ConfigureWebHost`
+and uses `IWebHostBuilder.UseSetting(...)` (NOT `ConfigureAppConfiguration`):
+`Program.cs` reads `builder.Configuration["Keycloak:Authority"]` during its
+top-level execution, which happens **before** any `ConfigureAppConfiguration`
+callback runs - so the settings must be fed into the pre-built configuration the
+entrypoint sees. The factory points `Keycloak:Authority`,
+`Keycloak:TokenEndpoint` and `Keycloak:ValidIssuers` at the Testcontainers
+Keycloak URL (so that `iss` validation passes) and rewrites the OTLP endpoints
+to unreachable placeholders (so OpenTelemetry fails fast without bringing up
+Alloy).
+
+### Run the tests
+
+```bash
+# All integration tests (pulls the Keycloak image on first run, ~30-40s):
+dotnet test backend/tests/Sample.Api.IntegrationTests
+
+# A single test:
+dotnet test backend/tests/Sample.Api.IntegrationTests `
+  --filter "FullyQualifiedName~UsersEndpointAuthorizationTests"
+
+# Whole solution (backend src + tests):
+dotnet test Sample.slnx
+```
+
+### Prerequisites
+
+- **Docker** running locally (Testcontainers creates and destroys the Keycloak
+  container via the Docker API - the full `docker-compose` stack is NOT
+  needed).
+- The Keycloak image is pulled automatically on the first run. To pre-pull:
+  ```bash
+  docker pull quay.io/keycloak/keycloak:26.2
+  ```
+- No Postgres, no Keycloak from `docker-compose`, no `dotnet run` of the API -
+  the test host boots the API in-process and talks to the throwaway container.
 
 ## Backoffice SPA (`backoffice/`)
 
