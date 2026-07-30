@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "skills": {
+    "aspnet-minimal-api-openapi": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/aspnet-minimal-api-openapi/SKILL.md",
+      "computedHash": "2c4b990eba7b246b17c043a60b85f0910a98ce5e8aad13b92e34c260fdf23d4b"
+    },
+    "chrome-devtools": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/chrome-devtools/SKILL.md",
+      "computedHash": "85d9c4ef94e00ddfc937d50aab72a307e80b98bc7e6744ec6e239ef68819c2d7"
+    },
+    "csharp-async": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/csharp-async/SKILL.md",
+      "computedHash": "e889958419757528e43fb674607d13fffe331a6673cfcef2b0ab8ff9fb569bb8"
+    },
+    "csharp-docs": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/csharp-docs/SKILL.md",
+      "computedHash": "93da3063bb770f13feec581efa3ff232c69a5a94b75cddfc4ad6e82909835cfe"
+    },
+    "csharp-xunit": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/csharp-xunit/SKILL.md",
+      "computedHash": "3c224e79f92ec027de3d5f44d0ca3077f076cb1e1bfff6b0db5b09c34c3aecd2"
+    },
+    "dotnet-best-practices": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/dotnet-best-practices/SKILL.md",
+      "computedHash": "9ef94db7f06c167d544369817e5a4415eeb7886dcff0d47026837a1aada260e3"
+    },
+    "ef-core": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/ef-core/SKILL.md",
+      "computedHash": "23f0a7c7e8c050337d67303f0af339da1ab8f0aa6a334f13112c3f85250c329c"
+    },
+    "github-actions-hardening": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/github-actions-hardening/SKILL.md",
+      "computedHash": "10e35ff70fcf42e09295ffad0ac3203e4d6b6f74557cc3fa1654112b89e0eea2"
+    },
+    "javascript-typescript-jest": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/javascript-typescript-jest/SKILL.md",
+      "computedHash": "0073d19ab0275eb6a8200aced6789a53744667bd717b5d1f44ce708a1740e5d4"
+    },
+    "multi-stage-dockerfile": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/multi-stage-dockerfile/SKILL.md",
+      "computedHash": "698bf93a84dae18fd7bd0b1d35c21427307fde78fbdf4624be9726f5f98189ca"
+    },
+    "nuget-manager": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/nuget-manager/SKILL.md",
+      "computedHash": "9081279ef0313a18766c8f03422de9ef31765212d31b13a513e66f39427b4e38"
+    },
+    "premium-frontend-ui": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/premium-frontend-ui/SKILL.md",
+      "computedHash": "e7f3d02a0233beafdd6fe5335427388109b9699ebcdc6a8782a8bada2826d916"
+    },
+    "react19-concurrent-patterns": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/react19-concurrent-patterns/SKILL.md",
+      "computedHash": "9ffa84ccf6e6520ca56f84933f4f9f1b9ccbcd6848a0400f6c104a071aeaf42a"
+    },
+    "react19-source-patterns": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/react19-source-patterns/SKILL.md",
+      "computedHash": "4b109d3ae035c6c4b8e056d16841c4d1ac0813ad84846bb482c247c45febd226"
+    },
+    "react19-test-patterns": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/react19-test-patterns/SKILL.md",
+      "computedHash": "16d1d800fcf2b0d06d1bc745252afcaec946a4a347354148c743d8200f964d1a"
+    },
+    "ui-screenshots": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/ui-screenshots/SKILL.md",
+      "computedHash": "a69d97ff390d75e41f417180702b2e7269a81c053a016cecfc1f046266e41bde"
+    },
+    "web-design-reviewer": {
+      "source": "github/awesome-copilot",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-reviewer/SKILL.md",
+      "computedHash": "10c6fad8b4f01dbeae969009d81d6c306c8a96d56077cad9bfe2a73a38f5dcbe"
+    }
+  }
+}

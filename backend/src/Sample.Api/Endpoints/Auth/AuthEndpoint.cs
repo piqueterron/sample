@@ -112,13 +112,13 @@ public sealed class AuthEndpoint : IEndpoint
             string? password = form["password"];
             string? scope = form["scope"];
 
-            if (string.IsNullOrEmpty(username) && string.IsNullOrEmpty(password))
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
                 // Tolerate the empty-form case by returning null so the caller returns 400.
                 return null;
             }
 
-            return new TokenRequest(username!, password!, scope);
+            return new TokenRequest(username, password, scope);
         }
 
         return await context.Request.ReadFromJsonAsync<TokenRequest>(cancellationToken);

@@ -3,7 +3,7 @@
 using global::Mediator;
 using Sample.Application.Features.Users.GetUsers;
 
-public class UserEndpoint : IEndpoint
+public sealed class UserEndpoint : IEndpoint
 {
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
@@ -11,15 +11,17 @@ public class UserEndpoint : IEndpoint
             .WithTags("Users")
             .RequireAuthorization("admin");
 
-        group.MapGet("/", GetUsers)
+        group.MapGet("/", GetUsersAsync)
             .WithDescription("Get all users")
             .WithSummary("Get all users")
-            .Produces(StatusCodes.Status200OK);
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
     }
 
-    private static async Task<IResult> GetUsers(IMediator mediator)
+    private static async Task<IResult> GetUsersAsync(IMediator mediator, CancellationToken cancellationToken)
     {
-        await mediator.Send(new UserQuery());
+        await mediator.Send(new UserQuery(), cancellationToken);
 
         return Results.Ok();
     }

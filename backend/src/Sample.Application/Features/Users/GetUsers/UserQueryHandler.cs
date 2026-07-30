@@ -15,7 +15,7 @@ public sealed class UserQueryHandler : IRequestHandler<UserQuery>
     public ValueTask<Unit> Handle(UserQuery request, CancellationToken cancellationToken)
     {
         //TODO : Implement the logic to handle the UserQuery request and return the appropriate result.
-        _logger.LogInformation($"[{Guid.CreateVersion7()}] Handling UserQuery request.");
+        _logger.LogInformation("[{CorrelationId}] Handling UserQuery request.", Guid.CreateVersion7());
 
         return ValueTask.FromResult(Unit.Value);
     }

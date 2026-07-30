@@ -6,6 +6,9 @@
     <Project Path="backend/src/Sample.Domain/Sample.Domain.csproj" Id="85a9aa57-00a2-46c9-b4b3-3fbe215694b2" />
     <Project Path="backend/src/Sample.Infrastructure/Sample.Infrastructure.csproj" Id="c7f60bc3-c04d-4cfa-824f-36ffe8891b43" />
   </Folder>
+  <Folder Name="/backend/tests/">
+    <Project Path="backend/tests/Sample.Api.IntegrationTests/Sample.Api.IntegrationTests.csproj" />
+  </Folder>
   <Project Path=".docker/docker-compose.dcproj">
     <Build />
   </Project>

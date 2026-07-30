@@ -7,6 +7,20 @@ services:
     build:
       context: ..
       dockerfile: backend/src/Sample.Api/Dockerfile
+    healthcheck:
+      # The aspnet:10.0 image has no curl/wget; bash's /dev/tcp avoids adding packages.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080 && printf \"GET /health HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3 && grep -q \"200\" <&3' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  backoffice:
+    image: ${DOCKER_REGISTRY-}backoffice
+    container_name: backoffice
+    build:
+      context: ../backoffice
+      dockerfile: Dockerfile
 
   postgres:
     image: postgres:16

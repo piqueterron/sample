@@ -1,0 +1,88 @@
+{
+  "realm": "company",
+  "enabled": true,
+  "displayName": "Company Realm (Integration Tests)",
+
+  "roles": {
+    "realm": [
+      { "name": "admin" },
+      { "name": "user" }
+    ]
+  },
+
+  "clients": [
+    {
+      "clientId": "portal-api",
+      "name": "Portal API",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+
+      "redirectUris": [
+        "http://localhost/*"
+      ],
+      "webOrigins": [
+        "http://localhost"
+      ],
+
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+
+      "protocolMappers": [
+        {
+          "name": "audience-portal-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "portal-api",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "email": "admin@example.com",
+
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+
+      "realmRoles": [ "admin" ]
+    },
+    {
+      "username": "test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@example.com",
+
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+
+      "realmRoles": [ "user" ]
+    }
+  ]
+}
