@@ -309,7 +309,7 @@ with **Grafana** as the visualization layer.
 
 ### Pipeline
 
-```
+```text
 .NET API --(OTLP HTTP/protobuf)--> Alloy --+--> Tempo (traces)
                                             +--> Prometheus (remote_write) -+
 .NET API (stdout JSON logs) -> Alloy (docker.sock) -> Loki -----------------+
@@ -336,11 +336,11 @@ The API registers OpenTelemetry in
 `backend/src/Sample.Api/Extensions/ObservabilityExtensions.cs` and is wired
 from `Program.cs` via `builder.Services.AddObservability(builder.Configuration)`.
 
-Configuration lives in `appsettings.json` under `Otel:` and is overridable
+Configuration lives in `appsettings.Development.json` under `Otel:` and is overridable
 through the standard environment variables `OTEL_*` (see
 `.docker/docker-compose.yml` and `.docker/docker-compose.override.yml`):
 
-```
+```env
 Otel__ServiceName=sample-api
 Otel__Endpoint__Traces=http://alloy:4318/v1/traces
 Otel__Endpoint__Metrics=http://alloy:4318/v1/metrics
@@ -370,7 +370,7 @@ The API writes logs to stdout as JSON (`builder.Logging.AddJsonConsole(...)` in
 
 In Grafana Explore -> Loki, query e.g.:
 
-```
+```logql
 {container="api"} | json | line_format "{{.level}} {{.logger}}: {{.message}}"
 ```
 

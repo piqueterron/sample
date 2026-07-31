@@ -44,12 +44,16 @@ backend/
       Dockerfile                   # multi-stage, mcr.microsoft.com/dotnet/{sdk,aspnet}:10.0
       appsettings*.json           # config; sensitive values via UserSecrets / env
     Sample.Application/           # use-cases (Features/<Feature>/<Query|Command>/)
-      Features/Users/GetUsers/
+      Features/Users/GetUsers/UserQueryHandler.cs  # IRequest + IRequestHandler pair
       AssemblyInfo.cs
     Sample.Infrastructure/        # cross-cutting: EF Core, Mediator pipeline behaviors
       Behaviors/ValidationBehavior.cs
-    Sample.Domain/                # pure domain model (no dependencies)
-  tests/                          # empty - planned for xUnit
+    Sample.Domain/                # pure domain model (no references)
+  tests/
+    Sample.Api.IntegrationTests/   # xUnit + Testcontainers (Keycloak) + WebApplicationFactory
+      Endpoints/                   # PublicEndpointsTests, UsersEndpointAuthorizationTests
+      Infrastructure/              # KeycloakFixture, SampleApiFactory, IntegrationTestBase
+      keycloak/realm-export.json   # minimal realm imported into the test Keycloak
 backoffice/                      # React 19 + Vite + TypeScript SPA (Authorization Code + PKCE)
   src/                            # main.tsx, App.tsx, oidc.ts (UserManager), api.ts
   public/                         # favicon.svg
@@ -282,26 +286,60 @@ patterns before touching auth code:
 
 ## Testing Instructions
 
-The `backend/tests/` folder is currently empty - the test project has not been
-scaffolded yet. Conventions to follow when adding tests:
+The solution ships an **integration test project** at
+`backend/tests/Sample.Api.IntegrationTests/`. It boots the real `Sample.Api`
+in-memory via `WebApplicationFactory<Program>` and exercises the protected
+endpoints against a **real Keycloak** instance brought up on demand by
+[Testcontainers]. No mocked JWT middleware, no in-memory auth - the JwtBearer
+stack, the `admin` policy's `RequireAssertion` and the `oidc-audience-mapper`
+audience validation are all exercised against tokens minted by a live Keycloak.
 
-- **Framework**: xUnit (the `csharp-xunit` skill is installed; see
-  `.agents/skills/csharp-xunit/`). Drop the test project at
-  `backend/tests/Sample.<Layer>.Tests/`.
+Conventions:
+
+- **Framework**: xUnit (`[Fact]` / `[Theory]`), FluentAssertions-style explicit
+  asserts. The `csharp-xunit` skill is installed; see `.agents/skills/csharp-xunit/`.
 - **Test discovery**: file naming `*Tests.cs`, methods `public async Task` or
-  `public void`, `[Fact]` / `[Theory]` attributes.
-- **Reference target**: unit tests reference the layer under test only
-  (e.g. `Sample.Application.Tests` -> `Sample.Application`). Integration tests
-  can reference `Sample.Api` for the full stack.
-- **Run**:
+  `public void`.
+- **Test classes** extend `IntegrationTestBase`, decorated with the xUnit
+  collection `IntegrationTests`. The collection hosts a single
+  `KeycloakFixture` (`ICollectionFixture<>`), so the Keycloak container is
+  started **once** per test run and reused across tests (~1-2s per assertion).
+- **Coverage** (current): `PublicEndpointsTests` (health + token endpoint) and
+  `UsersEndpointAuthorizationTests` (401 without token, 200 with admin role,
+  403 with user role, 401 with garbage token).
+- **No unit test project yet**: layer-scoped unit tests
+  (`Sample.Application.Tests`, `Sample.Domain.Tests`, ...) are not scaffolded.
+  Drop the first one at `backend/tests/Sample.<Layer>.Tests/`, referencing the
+  layer under test only.
 
-  ```bash
-  dotnet test Sample.slnx
-  dotnet test backend/tests/Sample.Application.Tests --filter "FullyQualifiedName~UserQuery"
-  ```
+### Run
 
-- **Coverage**: configure `coverlet` / `dotnet-coverage` when scaffolding the
-  first test project; report a target here once set.
+```bash
+# All integration tests (Testcontainers pulls the Keycloak image on first run):
+dotnet test backend/tests/Sample.Api.IntegrationTests
+
+# Whole solution:
+dotnet test Sample.slnx
+
+# Single test:
+dotnet test backend/tests/Sample.Api.IntegrationTests `
+  --filter "FullyQualifiedName~UsersEndpointAuthorizationTests"
+```
+
+Prerequisites: **Docker** running locally (Testcontainers creates and destroys
+the Keycloak container via the Docker API; the full `docker-compose` stack is
+not needed). No Postgres, no `docker-compose` Keycloak, no `dotnet run` of the
+API - the test host boots the API in-process and talks to the throwaway
+container. To pre-pull:
+
+```bash
+docker pull quay.io/keycloak/keycloak:26.2
+```
+
+### Coverage tooling
+
+Configure `coverlet` / `dotnet-coverage` when scaffolding the first unit test
+project; report a target here once set.
 
 ## Code Style Guidelines
 
@@ -387,8 +425,11 @@ injection. Until then, do not add workflows that run on `@latest` tags.
 - **TLS**: `app.UseHttpsRedirection()` is on. When running the API outside
   Docker in dev, Keycloak `RequireHttpsMetadata` is `false` (HTTP dev realm) -
   this is dev-only and must be `true` in any non-dev environment.
-- **CORS**: not configured yet. If the frontends (`web/`, `backoffice/`, both
-  currently empty) need it, scope the origins explicitly rather than wildcard.
+- **CORS**: configured via `BuilderExtensions.AddSpaCors` under the `"spa"`
+  policy. Origins come from `Cors:AllowedOrigins` (semicolon-separated) in
+  `docker-compose.override.yml` (dev: `http://localhost:5173;5174;4173;3000`)
+  with a fallback to the well-known dev origins if unset. Keep explicit origins
+  - never wildcard - and add new frontends here when they are introduced.
 - **Keycloak admin**: `admin/admin` is only acceptable for the local dev realm.
   Rotate before any deployment.
 - **Database**: Postgres dev credentials `keycloak/keycloak` are dev-only.
@@ -401,7 +442,11 @@ injection. Until then, do not add workflows that run on `@latest` tags.
 ## Skills (installed at project scope)
 
 The following agent skills are pinned in `skills-lock.json` and live in
-`.agents/skills/`. They are committable and shared with the team.
+`.agents/skills/`. They are committable and shared with the team. Both backend
+and frontend skill sets are installed (the full manifest is in `skills-lock.json`;
+17 skills total).
+
+### Backend (.NET 10 / ASP.NET Core / EF Core stack)
 
 - **`dotnet-best-practices`**: Any .NET/C# change - baseline quality rules
 - **`csharp-async`**: Async/await patterns, cancellation, `ValueTask` edge cases
@@ -409,9 +454,25 @@ The following agent skills are pinned in `skills-lock.json` and live in
 - **`aspnet-minimal-api-openapi`**: Adding endpoints, OpenAPI/Scalar integration
 - **`ef-core`**: DbContext, migrations, Npgsql querying patterns
 - **`nuget-manager`**: Adding/updating packages with Central Package Management
-- **`csharp-xunit`**: Writing tests when the tests project is scaffolded
+- **`csharp-xunit`**: Writing tests for `backend/tests/Sample.Api.IntegrationTests`
+  (and future `Sample.<Layer>.Tests` projects)
 - **`github-actions-hardening`**: When CI workflows are introduced
-- **`multi-stage-dockerfile`**: Authoring/optimizing the multi-stage Dockerfile
+- **`multi-stage-dockerfile`**: Authoring/optimizing the API / SPA Dockerfiles
+
+### Frontend (React 19 + Vite + TypeScript stack)
+
+- **`premium-frontend-ui`**: Crafting immersive, high-performance SPA UIs
+  (motion, typography, architecture)
+- **`web-design-reviewer`**: Reviewing the SPA visually (responsive design,
+  accessibility, layout breakage) and fixing it at the source level
+- **`react19-source-patterns`**: React 19 source patterns (refs, context, API changes)
+- **`react19-test-patterns`**: React 19 test patterns (`act()`, `Simulate` removal,
+  `StrictMode` call count changes)
+- **`react19-concurrent-patterns`**: `useTransition`, `useDeferredValue`,
+  `Suspense`, `use()`, `useOptimistic`
+- **`javascript-typescript-jest`**: Writing Jest tests for the SPA once added
+- **`chrome-devtools`**: Browser automation, debugging and performance analysis
+- **`ui-screenshots`**: Capturing screenshots of the SPA to validate UI changes
 
 Update them with `npx skills update` (or `npx skills update <name>`). Restore
 on a fresh clone with `npx skills experimental_install`.
