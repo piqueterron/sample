@@ -6,20 +6,39 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 public sealed class AuthEndpoint : IEndpoint
 {
     public void MapEndpoints(IEndpointRouteBuilder app)
     {
+        // The /auth/token endpoint exposes Keycloak's `password` grant, which is
+        // deprecated in OAuth 2.1 and only safe behind transparent admin
+        // credentials. It MUST NOT run in production, where every client (SPA,
+        // CLI, mobile) must use the `authorization_code` + PKCE flow against the
+        // Keycloak `backoffice-web` public client directly. The WebApplicationFactory
+        // sets the environment to "IntegrationTest" so the existing
+        // PublicEndpointsTests.PostToken_WithAdminCredentials_Returns200 keeps
+        // exercising the token proxy.
+        var env = app.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        if (!env.IsDevelopment() && !env.IsEnvironment("IntegrationTest"))
+        {
+            return;
+        }
+
         var group = app.MapGroup("/auth")
             .WithTags("Auth");
 
         group.MapPost("/token", ExchangeAsync)
             .WithDescription("""
                 Exchange administrator credentials for a Keycloak access token (password grant).
-                Use the returned access_token as Bearer scheme against protected endpoints such as GET /users.
+                DEV ONLY: the `password` grant is deprecated in OAuth 2.1 and is surfaced
+                here exclusively for local development and integration tests. Production
+                clients (SPA, CLI) must use the `authorization_code` + PKCE flow against
+                the `backoffice-web` public client.
             """)
-            .WithSummary("Get a token from Keycloak")
+            .WithSummary("Get a token from Keycloak (dev only)")
             .AllowAnonymous()
             .Accepts<TokenRequest>(MediaTypeNames.Application.FormUrlEncoded)
             .Accepts<TokenRequest>(MediaTypeNames.Application.Json)

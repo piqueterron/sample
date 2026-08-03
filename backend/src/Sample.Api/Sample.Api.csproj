@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup> 
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" /> 
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Mediator.Abstractions" /> 
     <PackageReference Include="Mediator.SourceGenerator">
@@ -34,6 +35,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sample.Application\Sample.Application.csproj" />
+    <!-- Sample.Api wires up Sample.Infrastructure services (DbContext, persistence
+         extension methods) directly, so it needs a direct project reference.
+         This will be re-evaluated in Fase 3 when the dependency direction is
+         inverted (Application -> Domain, Infrastructure -> Application -> Domain). -->
+    <ProjectReference Include="..\Sample.Infrastructure\Sample.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

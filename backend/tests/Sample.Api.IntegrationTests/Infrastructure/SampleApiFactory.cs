@@ -43,13 +43,12 @@ public sealed class SampleApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Keycloak:RequireHttpsMetadata", "false");
         builder.UseSetting("Keycloak:ValidIssuers", _keycloak.Authority);
 
-        // The OTLP exporter reads these on startup. Pointing them at an
-        // endpoint nothing listens on keeps OpenTelemetry's attempts
-        // quick/non-fatal while we exercise HTTP paths. The integration test
-        // suite deliberately does NOT bring up the Grafana LGTM observability
-        // stack (Alloy / Tempo / Loki / Prometheus).
-        builder.UseSetting("Otel:Endpoint:Default", "http://127.0.0.1:0");
-        builder.UseSetting("Otel:Endpoint:Traces", "http://127.0.0.1:0/v1/traces");
-        builder.UseSetting("Otel:Endpoint:Metrics", "http://127.0.0.1:0/v1/metrics");
+        // The OTLP exporter reads these on startup. The integration test suite
+        // deliberately does NOT bring up the Grafana LGTM observability stack
+        // (Alloy / Tempo / Loki / Prometheus), so disabling the OpenTelemetry
+        // SDK entirely in tests is cleaner than pointing at an unreachable
+        // endpoint (`http://127.0.0.1:0`) which only generates noisy failed
+        // export logs on each test run.
+        builder.UseSetting("OTEL_SDK_DISABLED", "true");
     }
 }

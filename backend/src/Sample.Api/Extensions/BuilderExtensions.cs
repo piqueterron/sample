@@ -3,6 +3,7 @@
 using System.Net.Mime;
 using System.Security.Claims;
 using System.Text.Json;
+using FluentValidation;
 using global::Mediator;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -38,15 +39,30 @@ public static class BuilderExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers the global exception handler so unhandled exceptions are mapped
+    /// to RFC 7807 <c>ProblemDetails</c> responses. Domain invariants become
+    /// <c>409 Conflict</c>; everything else becomes <c>500 Internal Server Error</c>.
+    /// Endpoints that declare <c>ProducesProblem(...)</c> in their OpenAPI metadata
+    /// now have a runtime handler that actually produces that shape.
+    /// </summary>
+    public static IServiceCollection AddGlobalExceptionHandler(this IServiceCollection services)
+    {
+        services.AddExceptionHandler<GlobalExceptionHandler>();
+        services.AddProblemDetails();
+
+        return services;
+    }
+
     public static IServiceCollection AddDispatcher(this IServiceCollection services)
     {
         services.AddMediator((MediatorOptions options) =>
         {
             options.Namespace = "Sample";
-            options.ServiceLifetime = ServiceLifetime.Singleton;
+            options.ServiceLifetime = ServiceLifetime.Scoped;
             options.GenerateTypesAsInternal = true;
             options.Assemblies = [typeof(Application.AssemblyInfo).Assembly];
-            options.PipelineBehaviors = [typeof(Infrastructure.Behaviors.ValidationBehavior<,>)];
+            options.PipelineBehaviors = [typeof(Application.Behaviors.ValidationBehavior<,>)];
             options.StreamPipelineBehaviors = [];
 
             options.Telemetry.EnableMetrics = true;
@@ -54,6 +70,45 @@ public static class BuilderExtensions
             options.Telemetry.EnableTracing = true;
             options.Telemetry.ActivitySourceName = "Sample.Mediator";
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the application-layer abstractions against their
+    /// <c>Sample.Infrastructure</c> implementations (e.g.
+    /// <c>IUserRepository</c> -> <c>UserRepository</c>,
+    /// <c>ITaskRepository</c> -> <c>TaskRepository</c>). Uses Scrutor assembly
+    /// scanning so new repository implementations in the Infrastructure
+    /// assembly are picked up automatically. Also registers FluentValidation
+    /// validators discovered in the Application assembly so the
+    /// <c>ValidationBehavior</c> pipeline behavior can resolve them.
+    /// </summary>
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    {
+        var infrastructureAssembly = typeof(Infrastructure.Persistence.SampleDbContext).Assembly;
+        var applicationAssembly = typeof(Application.AssemblyInfo).Assembly;
+
+        // Scan the Infrastructure assembly for any concrete class that
+        // directly implements an interface from Sample.Application.Abstractions.
+        // Since each repository implements exactly one such interface the
+        // AsMatchingInterface registration wires them up automatically.
+        services.Scan(scan => scan
+            .FromAssemblies(infrastructureAssembly)
+            .AddClasses(classes => classes.AssignableTo(typeof(Sample.Application.Abstractions.IUserRepository)))
+            .AsMatchingInterface()
+            .WithScopedLifetime());
+
+        services.Scan(scan => scan
+            .FromAssemblies(infrastructureAssembly)
+            .AddClasses(classes => classes.AssignableTo(typeof(Sample.Application.Abstractions.ITaskRepository)))
+            .AsMatchingInterface()
+            .WithScopedLifetime());
+
+        // FluentValidation: every AbstractValidator<T> in Application is
+        // registered as a validator. The ValidationBehavior pipeline resolves
+        // IEnumerable<IValidator<TMessage>> from DI.
+        services.AddValidatorsFromAssembly(applicationAssembly);
 
         return services;
     }
@@ -86,11 +141,12 @@ public static class BuilderExtensions
             client.Timeout = TimeSpan.FromSeconds(15);
             client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue(MediaTypeNames.Application.Json));
         })
-        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-        {
-            AllowAutoRedirect = false,
-            UseProxy = false
-        });
+        // Use framework defaults for the primary handler. Previous code disabled
+        // auto-redirect (`AllowAutoRedirect = false`) and disabled the system proxy
+        // (`UseProxy = false`); the latter breaks any environment behind a corporate
+        // forward proxy. Leaving all defaults keeps the handler behavior aligned
+        // with `HttpClientFactory` expectations.
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler());
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

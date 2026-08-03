@@ -12,17 +12,22 @@ public sealed class UserEndpoint : IEndpoint
             .RequireAuthorization("admin");
 
         group.MapGet("/", GetUsersAsync)
-            .WithDescription("Get all users")
-            .WithSummary("Get all users")
-            .Produces(StatusCodes.Status200OK)
+            .WithDescription("List all users. Optional `search` query parameter filters by " +
+                             "username or email (case-insensitive substring).")
+            .WithSummary("List users")
+            .Produces<UserQueryResult>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status403Forbidden);
     }
 
-    private static async Task<IResult> GetUsersAsync(IMediator mediator, CancellationToken cancellationToken)
+    private static async Task<IResult> GetUsersAsync(
+        IMediator mediator,
+        string? search,
+        CancellationToken cancellationToken)
     {
-        await mediator.Send(new UserQuery(), cancellationToken);
+        var result = await mediator.Send(new UserQuery(search), cancellationToken);
 
-        return Results.Ok();
+        return Results.Ok(result);
     }
 }

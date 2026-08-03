@@ -1,11 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Sample.Infrastructure\Sample.Infrastructure.csproj" />
+    <!-- DDD/Clean Architecture direction: Application depends on Domain (the
+         pure model). It does NOT reference Infrastructure; the Infrastructure
+         project implements the abstractions defined here (e.g. IUserRepository)
+         in the other direction. The API composition root wires both layers. -->
+    <ProjectReference Include="..\Sample.Domain\Sample.Domain.csproj" />
   </ItemGroup>
 
 </Project>

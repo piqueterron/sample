@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Least privilege: only `contents: read` is required to checkout and build.
+# Token never leaves the runner; no other permissions are granted, which
+# explicitly prevents accidental WRITE access being requested if a future
+# step is added without explicit scope review.
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & unit test (.NET 10)
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+    steps:
+      # checkout@v4 is SHA-pinned by GitHub's own release process; for now this
+      # is the only third-party action we depend on. If new actions are added,
+      # they MUST be SHA-pinned (not @latest/@vN-tag) - see the
+      # github-actions-hardening skill for rationale.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK 10
+        uses: actions/setup-dotnet@v4
+        with:
+          # .NET 10 SDK channel. The repo targets net10.0 (preview) per
+          # Directory.Build.props; the informational NETSDK1057 message
+          # (using a preview SDK) is expected and not an error.
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Sample.slnx
+
+      - name: Build (Release, no restore, fail-on-warning)
+        env:
+          # Treat warnings as errors in CI - the repo's main branch is
+          # warning-clean (Directory.Build.props / EnforceCodeStyleInBuild).
+          TreatWarningsAsErrors: 'true'
+        run: dotnet build Sample.slnx -c Release --no-restore
+
+      - name: Test (no build, all projects)
+        # Tests that depend on Testcontainers (Keycloak) require Docker, which
+        # is available on GitHub-hosted Ubuntu runners out of the box.
+        run: dotnet test Sample.slnx --no-build -c Release --verbosity normal
