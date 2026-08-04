@@ -6,6 +6,10 @@ services:
       - Keycloak__RequireHttpsMetadata=false
       - Keycloak__ValidIssuers=http://localhost:8080/realms/company;http://keycloak:8080/realms/company
       - ASPNETCORE_ENVIRONMENT=Development
+      # Override the localhost-bound connection string from appsettings.Development.json
+      # so the API, running in the `Sample` compose network, resolves Postgres by its
+      # service name instead of the container's own localhost.
+      - ConnectionStrings__SampleDb=Host=postgres;Port=5432;Database=sample_db;Username=app_user;Password=sample
       - ASPNETCORE_HTTP_PORTS=8080
       - ASPNETCORE_HTTPS_PORTS=
       - OTEL_SERVICE_NAME=sample-api
@@ -15,6 +19,7 @@ services:
       - Cors__AllowedOrigins=http://localhost:5173;http://localhost:5174;http://localhost:4173;http://localhost:3000
     depends_on:
       - alloy
+      - postgres
     ports:
       - "5157:8080"
     volumes:

@@ -22,7 +22,7 @@ public static class InfrastructureExtensions
                 via the ConnectionStrings__SampleDb env var (Docker: 'postgres')
                 """);
 
-        services.AddDbContextPool<SampleDbContext>(options =>
+        services.AddDbContext<SampleDbContext>(options =>
         {
             options.UseNpgsql(connectionString);
         });
